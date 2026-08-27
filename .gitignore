@@ -1,0 +1,41 @@
+# ── Secrets: never commit ───────────────────────────────────────────────
+.env
+*.env
+.env.*
+!.env.example
+
+# Scripts containing a hardcoded Twitter/X auth_token cookie — DO NOT PUSH.
+# Refactor these to read AUTH_TOKEN from the environment before committing them.
+distortion-backend/test_twitter_accounts.py
+distortion-backend/test_twitter_comments.py
+distortion-backend/test_twitter_single.py
+distortion-backend/test_trump.py
+distortion-backend/experiment_twitter.py
+distortion-backend/experiment_twitter_v2.py
+distortion-backend/debug_twitter.py
+
+# ── Research output / scraped data (large, not needed in repo) ───────────
+distortion-backend/research_results/
+distortion-backend/research_results_*/
+
+# ── Databases (binary, may contain scraped data) ────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+data/
+distortion-backend/data/
+
+# ── Python ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── Node (frontend) ─────────────────────────────────────────────────────
+node_modules/
+
+# ── OS / editor / local tool config ─────────────────────────────────────
+.DS_Store
+.claude/

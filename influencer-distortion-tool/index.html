@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Influencer Distortion Detection</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --color-background-primary: #ffffff;
+      --color-background-secondary: #f6f5f2;
+      --color-background-tertiary: #f0eeea;
+      --color-text-primary: #1a1a18;
+      --color-text-secondary: #5c5c58;
+      --color-text-tertiary: #9a9994;
+      --color-border-tertiary: rgba(0,0,0,0.10);
+      --color-border-secondary: rgba(0,0,0,0.18);
+      --color-border-primary: rgba(0,0,0,0.28);
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --border-radius-md: 8px;
+      --border-radius-lg: 12px;
+      --border-radius-xl: 16px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-background-primary: #1e1e1c;
+        --color-background-secondary: #272724;
+        --color-background-tertiary: #2e2e2b;
+        --color-text-primary: #f0ede8;
+        --color-text-secondary: #a8a49e;
+        --color-text-tertiary: #6b6865;
+        --color-border-tertiary: rgba(255,255,255,0.08);
+        --color-border-secondary: rgba(255,255,255,0.15);
+        --color-border-primary: rgba(255,255,255,0.24);
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-background-tertiary);
+      color: var(--color-text-primary);
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    .container { max-width: 720px; margin: 0 auto; }
+    .app-header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .app-logo {
+      width: 32px; height: 32px;
+      border-radius: var(--border-radius-md);
+      background: #FCEBEB;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; color: #A32D2D;
+    }
+    .app-title { font-size: 15px; font-weight: 500; }
+    .app-subtitle { font-size: 12px; color: var(--color-text-tertiary); }
+    .card {
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 20px; margin-bottom: 16px;
+    }
+    .section-label {
+      font-size: 11px; font-weight: 500; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--color-text-tertiary); margin-bottom: 10px;
+    }
+    .search-row { display: flex; gap: 8px; margin-bottom: 20px; }
+    .search-wrap { position: relative; flex: 1; }
+    .search-wrap i {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      font-size: 16px; color: var(--color-text-tertiary); pointer-events: none;
+    }
+    .search-wrap input {
+      width: 100%; height: 38px; padding: 0 12px 0 36px;
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 14px; font-family: var(--font-sans);
+      background: var(--color-background-primary); color: var(--color-text-primary);
+      outline: none; transition: border-color 0.15s;
+    }
+    .search-wrap input:focus {
+      border-color: var(--color-border-primary);
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+    }
+    .analyze-btn {
+      height: 38px; padding: 0 16px;
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 13px; font-family: var(--font-sans);
+      color: var(--color-text-primary); cursor: pointer;
+      display: flex; align-items: center; gap: 6px; white-space: nowrap;
+      transition: background 0.1s, transform 0.1s;
+    }
+    .analyze-btn:hover { background: var(--color-background-secondary); }
+    .analyze-btn:active { transform: scale(0.98); }
+    .tabs {
+      display: flex; border-bottom: 0.5px solid var(--color-border-tertiary);
+      margin-bottom: 20px; overflow-x: auto;
+    }
+    .tab {
+      padding: 8px 14px; font-size: 13px; color: var(--color-text-secondary);
+      cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -0.5px;
+      white-space: nowrap; transition: color 0.15s; user-select: none;
+    }
+    .tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); }
+    .tab:hover:not(.active) { color: var(--color-text-primary); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ── Profile ── */
+    .profile-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+    .avatar {
+      width: 52px; height: 52px; border-radius: 50%; background: #EEEDFE;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 500; color: #3C3489; flex-shrink: 0;
+    }
+    .profile-name { font-size: 15px; font-weight: 500; }
+    .profile-handle { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+    .profile-meta {
+      font-size: 12px; color: var(--color-text-tertiary);
+      margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .profile-meta span { display: flex; align-items: center; gap: 4px; }
+    .distortion-badge {
+      margin-left: auto; display: flex; flex-direction: column;
+      align-items: flex-end; gap: 4px; flex-shrink: 0;
+    }
+    .badge-label { font-size: 11px; color: var(--color-text-tertiary); }
+    .badge-ring {
+      width: 64px; height: 64px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-direction: column;
+      border: 3px solid #E24B4A; background: #FCEBEB;
+    }
+    .badge-score { font-size: 20px; font-weight: 500; color: #A32D2D; }
+    .badge-unit { font-size: 10px; color: #A32D2D; }
+
+    /* Five-dimension grid */
+    .metrics-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px; margin-bottom: 20px;
+    }
+    .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; }
+    .metric-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+    .metric-value { font-size: 22px; font-weight: 500; }
+    .metric-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+    /* Consistency score card — special */
+    .consistency-card {
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .consistency-ring-wrap { flex-shrink: 0; }
+    .consistency-details { flex: 1; }
+    .consistency-title { font-size: 12px; font-weight: 500; margin-bottom: 6px; }
+    .consistency-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px; color: var(--color-text-secondary); }
+    .consistency-bar-track { flex: 1; height: 4px; background: var(--color-border-tertiary); border-radius: 4px; overflow: hidden; }
+    .consistency-bar-fill { height: 100%; border-radius: 4px; background: #534AB7; }
+    .consistency-val { font-size: 11px; color: var(--color-text-tertiary); min-width: 28px; text-align: right; }
+
+    .bar-section { margin-bottom: 20px; }
+    .bar-row { margin-bottom: 12px; }
+    .bar-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
+    .bar-name { color: var(--color-text-secondary); }
+    .bar-track { height: 6px; background: var(--color-border-tertiary); border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+    .bar-high { background: #E24B4A; }
+    .bar-mid { background: #EF9F27; }
+    .bar-low { background: #639922; }
+
+    .chart-wrap { position: relative; height: 200px; width: 100%; margin-bottom: 20px; }
+
+    /* Deletion signal row */
+    .deletion-signal {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      margin-bottom: 20px; background: var(--color-background-secondary);
+    }
+    .deletion-icon { font-size: 18px; color: #854F0B; flex-shrink: 0; }
+    .deletion-text { font-size: 13px; color: var(--color-text-secondary); flex: 1; line-height: 1.5; }
+    .deletion-text strong { font-weight: 500; color: var(--color-text-primary); }
+    .deletion-badge {
+      font-size: 11px; font-weight: 500; padding: 3px 9px;
+      border-radius: 99px; background: #FAEEDA; color: #854F0B; flex-shrink: 0;
+    }
+
+    .insight-card {
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 14px; margin-bottom: 10px;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .insight-icon { font-size: 18px; color: var(--color-text-secondary); flex-shrink: 0; margin-top: 1px; }
+    .insight-text { font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; }
+    .insight-text strong { font-weight: 500; color: var(--color-text-primary); }
+
+    /* ── Posts ── */
+    .post-filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .filter-chip {
+      font-size: 11px; font-weight: 500; padding: 4px 10px;
+      border-radius: 99px; cursor: pointer; border: 0.5px solid var(--color-border-secondary);
+      background: var(--color-background-secondary); color: var(--color-text-secondary);
+      transition: all 0.12s;
+    }
+    .filter-chip.active { background: var(--color-text-primary); color: var(--color-background-primary); border-color: var(--color-text-primary); }
+    .post-card {
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 14px; margin-bottom: 10px;
+    }
+    .post-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .post-text { font-size: 13px; color: var(--color-text-primary); line-height: 1.55; flex: 1; }
+    .post-date { font-size: 11px; color: var(--color-text-tertiary); white-space: nowrap; }
+    .post-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .post-reason { font-size: 11px; color: var(--color-text-tertiary); font-style: italic; }
+    .post-confidence {
+      font-size: 11px; padding: 2px 7px; border-radius: 99px; font-weight: 500;
+      background: var(--color-background-secondary); color: var(--color-text-secondary);
+    }
+    .temporal-detail {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px; padding-top: 8px;
+      border-top: 0.5px solid var(--color-border-tertiary);
+      font-size: 11px; color: var(--color-text-secondary);
+    }
+    .temporal-detail i { color: #854F0B; font-size: 14px; }
+    .post-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
+    .tag-inflate { background: #FCEBEB; color: #A32D2D; }
+    .tag-anxiety { background: #FAEEDA; color: #854F0B; }
+    .tag-novelty { background: #EEEDFE; color: #3C3489; }
+    .tag-temporal { background: #E1F5EE; color: #0F6E56; }
+    .tag-deleted { background: #F1EFE8; color: #444441; }
+
+    /* ── Pipeline ── */
+    .pipeline-step { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 0.5px solid var(--color-border-secondary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 500; color: var(--color-text-secondary);
+      flex-shrink: 0; background: var(--color-background-secondary);
+    }
+    .step-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+    .step-desc { font-size: 13px; color: var(--color-text-secondary); line-height: 1.55; }
+    .step-detail {
+      margin-top: 6px; padding: 8px 10px;
+      background: var(--color-background-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 12px; color: var(--color-text-secondary); line-height: 1.5;
+    }
+    .step-connector { width: 0.5px; height: 18px; background: var(--color-border-tertiary); margin: 3px 0 3px 13.5px; }
+    .note-box {
+      padding: 14px; border-radius: var(--border-radius-lg);
+      border: 0.5px solid var(--color-border-tertiary);
+      background: var(--color-background-secondary);
+      font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; margin-top: 20px;
+    }
+    .note-box strong { font-weight: 500; color: var(--color-text-primary); }
+
+    /* ── Watchlist ── */
+    .acc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .acc-table th {
+      text-align: left; font-size: 11px; font-weight: 500;
+      color: var(--color-text-tertiary); letter-spacing: 0.05em;
+      padding: 0 10px 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary);
+    }
+    .acc-table td {
+      padding: 10px 10px 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary);
+      color: var(--color-text-secondary); vertical-align: middle;
+    }
+    .acc-table td:first-child { color: var(--color-text-primary); font-weight: 500; }
+    .acc-table tr:last-child td { border-bottom: none; }
+    .risk-pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+    .risk-high { background: #FCEBEB; color: #A32D2D; }
+    .risk-mid { background: #FAEEDA; color: #854F0B; }
+    .risk-low { background: #EAF3DE; color: #3B6D11; }
+    .risk-pending { background: #F1EFE8; color: #5F5E5A; }
+    .add-btn {
+      margin-top: 14px; height: 36px; padding: 0 14px;
+      background: transparent; border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md); font-size: 13px; font-family: var(--font-sans);
+      color: var(--color-text-secondary); cursor: pointer;
+      display: flex; align-items: center; gap: 6px; transition: background 0.1s;
+    }
+    .add-btn:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+
+    /* ── Research tab ── */
+    .research-stat-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px; margin-bottom: 20px;
+    }
+    .r-stat {
+      background: var(--color-background-secondary);
+      border-radius: var(--border-radius-md); padding: 14px;
+    }
+    .r-stat-num { font-size: 24px; font-weight: 500; }
+    .r-stat-label { font-size: 11px; color: var(--color-text-secondary); margin-top: 3px; }
+    .r-stat-sub { font-size: 11px; color: var(--color-text-tertiary); }
+
+    .export-row {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .export-btn {
+      height: 34px; padding: 0 14px;
+      background: transparent; border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md); font-size: 12px; font-family: var(--font-sans);
+      color: var(--color-text-secondary); cursor: pointer;
+      display: flex; align-items: center; gap: 6px; transition: background 0.1s;
+    }
+    .export-btn:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+
+    .annotation-queue { margin-bottom: 20px; }
+    .annotation-card {
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg);
+      padding: 14px; margin-bottom: 10px;
+    }
+    .annotation-text { font-size: 13px; line-height: 1.55; color: var(--color-text-primary); margin-bottom: 10px; }
+    .annotation-prompt { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px; }
+    .annotation-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ann-btn {
+      height: 30px; padding: 0 12px;
+      background: transparent; border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md); font-size: 12px; font-family: var(--font-sans);
+      color: var(--color-text-secondary); cursor: pointer; transition: all 0.1s;
+    }
+    .ann-btn:hover { background: var(--color-background-secondary); }
+    .ann-btn.selected-inflate { background: #FCEBEB; color: #A32D2D; border-color: #E24B4A; }
+    .ann-btn.selected-anxiety { background: #FAEEDA; color: #854F0B; border-color: #EF9F27; }
+    .ann-btn.selected-novelty { background: #EEEDFE; color: #3C3489; border-color: #7F77DD; }
+    .ann-btn.selected-temporal { background: #E1F5EE; color: #0F6E56; border-color: #1D9E75; }
+    .ann-btn.selected-none { background: #F1EFE8; color: #444441; border-color: #888780; }
+
+    .behavior-note {
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-lg); padding: 14px; margin-bottom: 10px;
+    }
+    .behavior-note-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+    .behavior-note-desc { font-size: 13px; color: var(--color-text-secondary); line-height: 1.55; }
+
+    .gaming-timeline { margin-top: 10px; }
+    .gaming-event { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; font-size: 13px; }
+    .gaming-dot { width: 8px; height: 8px; border-radius: 50%; background: #888780; flex-shrink: 0; margin-top: 5px; }
+    .gaming-dot.flag { background: #E24B4A; }
+    .gaming-dot.drop { background: #EF9F27; }
+    .gaming-dot.resume { background: #639922; }
+    .gaming-event-text { color: var(--color-text-secondary); line-height: 1.5; }
+    .gaming-event-text strong { color: var(--color-text-primary); font-weight: 500; }
+
+    /* ── Loading overlay ── */
+    .loading-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.3); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .loading-overlay.open { display: flex; }
+    .loading-box {
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-xl);
+      padding: 24px 32px; text-align: center;
+    }
+    .loading-spinner {
+      width: 32px; height: 32px; border: 2px solid var(--color-border-tertiary);
+      border-top-color: #E24B4A; border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 13px; color: var(--color-text-secondary); }
+    .loading-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4); z-index: 100;
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--color-background-primary);
+      border-radius: var(--border-radius-xl);
+      border: 0.5px solid var(--color-border-secondary);
+      padding: 24px; width: 100%; max-width: 420px;
+    }
+    .modal-title { font-size: 15px; font-weight: 500; margin-bottom: 16px; }
+    .modal label { font-size: 12px; color: var(--color-text-secondary); display: block; margin-bottom: 4px; }
+    .modal input, .modal select {
+      width: 100%; height: 36px; padding: 0 10px;
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 13px; font-family: var(--font-sans);
+      background: var(--color-background-primary); color: var(--color-text-primary);
+      margin-bottom: 12px; outline: none;
+    }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+    .btn-primary {
+      height: 34px; padding: 0 16px;
+      background: var(--color-text-primary); border: none;
+      border-radius: var(--border-radius-md);
+      font-size: 13px; font-family: var(--font-sans);
+      color: var(--color-background-primary); cursor: pointer;
+    }
+    .btn-ghost {
+      height: 34px; padding: 0 14px; background: transparent;
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      font-size: 13px; font-family: var(--font-sans);
+      color: var(--color-text-secondary); cursor: pointer;
+    }
+    .btn-ghost:hover { background: var(--color-background-secondary); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--color-text-primary); color: var(--color-background-primary);
+      font-size: 13px; font-family: var(--font-sans);
+      padding: 10px 18px; border-radius: 99px; z-index: 300;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      opacity: 0; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    @media (max-width: 520px) {
+      .profile-header { flex-wrap: wrap; }
+      .distortion-badge { margin-left: 0; }
+      .acc-table th:nth-child(3), .acc-table td:nth-child(3),
+      .acc-table th:nth-child(4), .acc-table td:nth-child(4) { display: none; }
+      .consistency-card { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="app-header">
+    <div class="app-logo"><i class="ti ti-scan" aria-hidden="true"></i></div>
+    <div>
+      <div class="app-title">Influencer Distortion Detection</div>
+      <div class="app-subtitle">Behavioral pattern profiling · not fact-checking</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="search-row">
+      <div class="search-wrap">
+        <i class="ti ti-at-sign" aria-hidden="true"></i>
+        <input type="text" id="handle-input" value="@techguruglobal" placeholder="@handle or account URL" />
+      </div>
+      <button class="analyze-btn" onclick="runAnalysis()">
+        <i class="ti ti-scan" aria-hidden="true"></i>
+        Analyze
+      </button>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('profile', this)">Distortion profile</div>
+      <div class="tab" onclick="switchTab('posts', this)">Flagged posts</div>
+      <div class="tab" onclick="switchTab('pipeline', this)">How it works</div>
+      <div class="tab" onclick="switchTab('accounts', this)">Watchlist</div>
+      <div class="tab" onclick="switchTab('research', this)">Research</div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 1 · DISTORTION PROFILE
+    ════════════════════════════════════════════════════ -->
+    <div id="tab-profile" class="tab-pane active">
+      <div class="profile-header">
+        <div class="avatar" id="avatar-initials">TG</div>
+        <div>
+          <div class="profile-name" id="profile-name">Tech Guru Global</div>
+          <div class="profile-handle" id="profile-handle">@techguruglobal · Twitter/X</div>
+          <div class="profile-meta">
+            <span id="profile-followers"><i class="ti ti-users" aria-hidden="true"></i> 2.3M followers</span>
+            <span id="profile-window"><i class="ti ti-calendar" aria-hidden="true"></i> Tracked 90 days</span>
+            <span id="profile-postcount"><i class="ti ti-file-text" aria-hidden="true"></i> 312 posts analyzed</span>
+          </div>
+        </div>
+        <div class="distortion-badge">
+          <span class="badge-label">Distortion index</span>
+          <div class="badge-ring">
+            <span class="badge-score">87</span>
+            <span class="badge-unit">/ 100</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- §3.1 Five dimensions -->
+      <p class="section-label">Five distortion dimensions</p>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label"><i class="ti ti-rocket" style="font-size:13px" aria-hidden="true"></i>Significance inflation</div>
+          <div class="metric-value">79%</div>
+          <div class="metric-sub">of posts</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label"><i class="ti ti-alert-triangle" style="font-size:13px" aria-hidden="true"></i>Anxiety manufacturing</div>
+          <div class="metric-value">68%</div>
+          <div class="metric-sub">of posts</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label"><i class="ti ti-flag" style="font-size:13px" aria-hidden="true"></i>Novelty claims</div>
+          <div class="metric-value">41%</div>
+          <div class="metric-sub">of posts</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label"><i class="ti ti-flame" style="font-size:13px" aria-hidden="true"></i>Loaded language</div>
+          <div class="metric-value">0%</div>
+          <div class="metric-sub">of posts</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label"><i class="ti ti-clock" style="font-size:13px" aria-hidden="true"></i>Temporal distortion</div>
+          <div class="metric-value">23%</div>
+          <div class="metric-sub">old content reframed</div>
+        </div>
+      </div>
+
+      <!-- §3.1 Consistency score — 5th dimension -->
+      <div class="consistency-card">
+        <div class="consistency-ring-wrap">
+          <svg width="72" height="72" viewBox="0 0 72 72" aria-label="Consistency score 91 out of 100">
+            <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(83,74,183,0.15)" stroke-width="6"/>
+            <circle cx="36" cy="36" r="30" fill="none" stroke="#534AB7" stroke-width="6"
+              stroke-dasharray="188.5" stroke-dashoffset="17"
+              stroke-linecap="round" transform="rotate(-90 36 36)"/>
+            <text x="36" y="33" text-anchor="middle" font-size="16" font-weight="500" fill="#3C3489">91</text>
+            <text x="36" y="45" text-anchor="middle" font-size="9" fill="#534AB7">consistency</text>
+          </svg>
+        </div>
+        <div class="consistency-details">
+          <div class="consistency-title">Consistency score — pattern stability over time</div>
+          <div class="consistency-row">
+            <span style="min-width:120px; font-size:12px">Week-to-week variance</span>
+            <div class="consistency-bar-track"><div class="consistency-bar-fill" style="width:8%; background:#3B6D11"></div></div>
+            <span class="consistency-val" style="color:#3B6D11">Low</span>
+          </div>
+          <div class="consistency-row">
+            <span style="min-width:120px; font-size:12px">Pattern window (days)</span>
+            <div class="consistency-bar-track"><div class="consistency-bar-fill" style="width:90%"></div></div>
+            <span class="consistency-val">90</span>
+          </div>
+          <div class="consistency-row">
+            <span style="min-width:120px; font-size:12px">Signal reliability</span>
+            <div class="consistency-bar-track"><div class="consistency-bar-fill" style="width:91%"></div></div>
+            <span class="consistency-val">High</span>
+          </div>
+          <div style="font-size:11px; color:var(--color-text-tertiary); margin-top:6px">
+            Score 91/100 → very stable pattern. Profiles above 70 are considered reliable for reader calibration.
+          </div>
+        </div>
+      </div>
+
+      <!-- Linguistic patterns — real data from /api/patterns/:handle -->
+      <div class="bar-section">
+        <p class="section-label">Linguistic pattern breakdown</p>
+        <div class="bar-row" id="pat-0">
+          <div class="bar-header"><span class="bar-name">"This changes everything"</span><span class="bar-pct" style="font-weight:500;color:#A32D2D">—</span></div>
+          <div class="bar-track"><div class="bar-fill bar-high" style="width:0%"></div></div>
+        </div>
+        <div class="bar-row" id="pat-1">
+          <div class="bar-header"><span class="bar-name">"Nobody is talking about this"</span><span class="bar-pct" style="font-weight:500;color:#A32D2D">—</span></div>
+          <div class="bar-track"><div class="bar-fill bar-high" style="width:0%"></div></div>
+        </div>
+        <div class="bar-row" id="pat-2">
+          <div class="bar-header"><span class="bar-name">"You'll be left behind"</span><span class="bar-pct" style="font-weight:500;color:#854F0B">—</span></div>
+          <div class="bar-track"><div class="bar-fill bar-mid" style="width:0%"></div></div>
+        </div>
+        <div class="bar-row" id="pat-3">
+          <div class="bar-header"><span class="bar-name">"I discovered / built this first"</span><span class="bar-pct" style="font-weight:500;color:#854F0B">—</span></div>
+          <div class="bar-track"><div class="bar-fill bar-mid" style="width:0%"></div></div>
+        </div>
+        <div class="bar-row" id="pat-4">
+          <div class="bar-header"><span class="bar-name">Stale content reframed as breaking</span><span class="bar-pct" style="font-weight:500;color:#3B6D11">—</span></div>
+          <div class="bar-track"><div class="bar-fill bar-low" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- §4.1 Deletion signal -->
+      <p class="section-label">Deletion signal</p>
+      <div class="deletion-signal">
+        <i class="ti ti-trash deletion-icon" aria-hidden="true"></i>
+        <div class="deletion-text">
+          <strong>11 posts deleted</strong> in the last 365 days (3.5% deletion rate).
+          Deletions cluster within 48h of posting — consistent with performance-testing and rapid removal of underperforming content.
+        </div>
+        <span class="deletion-badge">Elevated</span>
+      </div>
+
+      <!-- Trend chart -->
+      <p class="section-label">365-day distortion trend</p>
+      <div class="chart-wrap">
+        <canvas id="trendChart" role="img" aria-label="Line chart of weekly distortion rate over 365 days, consistently above 70%">Distortion rate above 70% for 13 consecutive weeks.</canvas>
+      </div>
+
+      <!-- Insights — dynamically generated from real data -->
+      <p class="section-label">Key insights</p>
+      <div id="key-insights-container"></div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 2 · FLAGGED POSTS
+    ════════════════════════════════════════════════════ -->
+    <div id="tab-posts" class="tab-pane">
+      <div class="post-filter-row">
+        <span class="filter-chip active" onclick="filterPosts('all', this)">All</span>
+        <span class="filter-chip" onclick="filterPosts('inflate', this)">Significance inflation</span>
+        <span class="filter-chip" onclick="filterPosts('anxiety', this)">Anxiety manufacturing</span>
+        <span class="filter-chip" onclick="filterPosts('novelty', this)">Novelty claim</span>
+        <span class="filter-chip" onclick="filterPosts('temporal', this)">Temporal distortion</span>
+        <span class="filter-chip" onclick="filterPosts('deleted', this)">Deleted posts</span>
+      </div>
+
+      <div id="posts-list">
+
+        <div class="post-card" data-types="inflate anxiety novelty">
+          <div class="post-top">
+            <div class="post-text">"This new AI paper changes EVERYTHING we thought we knew about intelligence. I've read hundreds of papers — this one is different. If you're not paying attention right now, you will regret it."</div>
+            <div class="post-date">Jun 21</div>
+          </div>
+          <div class="post-meta">
+            <span class="post-reason">Signals: "changes EVERYTHING", "you will regret it", "I've read hundreds"</span>
+            <span class="post-confidence">Confidence 94%</span>
+          </div>
+          <div class="post-tags">
+            <span class="tag tag-inflate">Significance inflation</span>
+            <span class="tag tag-anxiety">Anxiety manufacturing</span>
+            <span class="tag tag-novelty">Novelty claim</span>
+          </div>
+        </div>
+
+        <div class="post-card" data-types="inflate novelty temporal">
+          <div class="post-top">
+            <div class="post-text">"Nobody is talking about this startup that's about to make every cloud provider obsolete. I found them 8 months ago. Here's why this is the most important thread you'll read this week."</div>
+            <div class="post-date">Jun 18</div>
+          </div>
+          <div class="post-meta">
+            <span class="post-reason">Signals: "nobody is talking", "most important", "I found them"</span>
+            <span class="post-confidence">Confidence 89%</span>
+          </div>
+          <div class="temporal-detail">
+            <i class="ti ti-clock" aria-hidden="true"></i>
+            Linked article published <strong>Oct 3, 2024</strong> — posted here as new 257 days later
+          </div>
+          <div class="post-tags" style="margin-top:8px">
+            <span class="tag tag-inflate">Significance inflation</span>
+            <span class="tag tag-novelty">Novelty claim</span>
+            <span class="tag tag-temporal">Temporal distortion (+257 days)</span>
+          </div>
+        </div>
+
+        <div class="post-card" data-types="anxiety">
+          <div class="post-top">
+            <div class="post-text">"Developers who haven't learned this in the next 6 months will find themselves unemployable. The shift is already happening. Most people won't see it until it's too late."</div>
+            <div class="post-date">Jun 14</div>
+          </div>
+          <div class="post-meta">
+            <span class="post-reason">Signals: "unemployable", "too late", existential career threat framing</span>
+            <span class="post-confidence">Confidence 97%</span>
+          </div>
+          <div class="post-tags">
+            <span class="tag tag-anxiety">Anxiety manufacturing</span>
+          </div>
+        </div>
+
+        <div class="post-card" data-types="inflate anxiety temporal">
+          <div class="post-top">
+            <div class="post-text">"Breaking: OpenAI's latest move signals the end of the open-source AI era. I've been warning about this since 2022. Massive thread on what this means for your career."</div>
+            <div class="post-date">Jun 11</div>
+          </div>
+          <div class="post-meta">
+            <span class="post-reason">Signals: "Breaking", "end of era", "your career", recency claim mismatch</span>
+            <span class="post-confidence">Confidence 91%</span>
+          </div>
+          <div class="temporal-detail">
+            <i class="ti ti-clock" aria-hidden="true"></i>
+            Linked blog post published <strong>Feb 14, 2025</strong> — framed as "Breaking" 127 days later
+          </div>
+          <div class="post-tags" style="margin-top:8px">
+            <span class="tag tag-inflate">Significance inflation</span>
+            <span class="tag tag-anxiety">Anxiety manufacturing</span>
+            <span class="tag tag-temporal">Temporal distortion (+127 days)</span>
+          </div>
+        </div>
+
+        <div class="post-card" data-types="inflate novelty">
+          <div class="post-top">
+            <div class="post-text">"We built the tool everyone said was impossible. Exclusive first look before we go viral tomorrow. This is the future of how every company will operate within 2 years."</div>
+            <div class="post-date">Jun 7</div>
+          </div>
+          <div class="post-meta">
+            <span class="post-reason">Signals: "We built", "Exclusive", "every company", exclusivity and novelty claim</span>
+            <span class="post-confidence">Confidence 82%</span>
+          </div>
+          <div class="post-tags">
+            <span class="tag tag-inflate">Significance inflation</span>
+            <span class="tag tag-novelty">Novelty claim</span>
+          </div>
+        </div>
+
+        <div class="post-card" data-types="deleted inflate anxiety">
+          <div class="post-top">
+            <div class="post-text"><span style="color:var(--color-text-tertiary); font-style:italic">[Deleted — archived Jun 2 at 14:03 UTC]</span> "This regulation will destroy the entire AI industry within 90 days. Every founder I know is panicking. This is worse than 2008."</div>
+            <div class="post-date">Jun 2 ✕</div>
+          </div>
+          <div class="post-meta">
+            <span class="post-reason">Deleted 31h after posting — below median engagement. Archived before deletion.</span>
+            <span class="post-confidence">Archived</span>
+          </div>
+          <div class="post-tags">
+            <span class="tag tag-inflate">Significance inflation</span>
+            <span class="tag tag-anxiety">Anxiety manufacturing</span>
+            <span class="tag tag-deleted">Deleted</span>
+          </div>
+        </div>
+
+        <div class="post-card" data-types="deleted novelty anxiety">
+          <div class="post-top">
+            <div class="post-text"><span style="color:var(--color-text-tertiary); font-style:italic">[Deleted — archived May 28 at 09:17 UTC]</span> "I just got exclusive access to internal documents that will change everything you think you know about Big Tech. Thread incoming."</div>
+            <div class="post-date">May 28 ✕</div>
+          </div>
+          <div class="post-meta">
+            <span class="post-reason">Deleted 6h after posting — no follow-up thread was ever published.</span>
+            <span class="post-confidence">Archived</span>
+          </div>
+          <div class="post-tags">
+            <span class="tag tag-novelty">Novelty claim</span>
+            <span class="tag tag-anxiety">Anxiety manufacturing</span>
+            <span class="tag tag-deleted">Deleted</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 3 · HOW IT WORKS
+    ════════════════════════════════════════════════════ -->
+    <div id="tab-pipeline" class="tab-pane">
+      <p class="section-label" style="margin-bottom:16px">Detection pipeline</p>
+
+      <div class="pipeline-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Content collection</div>
+          <div class="step-desc">Post history is crawled from Twitter/X, YouTube, and newsletters. Videos are transcribed via Whisper-class ASR; YouTube auto-captions serve as fallback.</div>
+          <div class="step-detail">All content is timestamped and archived <em>before</em> potential deletion — deletion rate is treated as an independent signal. Posts confirmed deleted are preserved and tagged separately.</div>
+        </div>
+      </div>
+      <div class="step-connector"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Rhetorical pattern detection</div>
+          <div class="step-desc">A keyword and phrase model runs a fast, high-recall first pass across each post, tagging candidates across four distortion dimensions: significance inflation, anxiety manufacturing, novelty claims, and temporal distortion.</div>
+        </div>
+      </div>
+      <div class="step-connector"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">LLM-based classification</div>
+          <div class="step-desc">Ambiguous cases are passed to a language model that classifies distortion type and rates intensity on a 0–100 confidence scale. This step makes no claims about factual accuracy — only rhetorical framing pattern.</div>
+          <div class="step-detail">Confidence below 70% sends the post to the human annotation queue (see Research tab) rather than auto-flagging.</div>
+        </div>
+      </div>
+      <div class="step-connector"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Temporal cross-reference</div>
+          <div class="step-desc">Linked content publish dates are extracted and compared against the post's claimed recency. A gap of 30+ days between original publication and the post date flags the post for temporal distortion scoring.</div>
+          <div class="step-detail">Original publish date is shown alongside the post on the Flagged posts tab. The largest detected gap in this account: 257 days.</div>
+        </div>
+      </div>
+      <div class="step-connector"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <div class="step-title">Profile aggregation + consistency scoring</div>
+          <div class="step-desc">Per-account rolling statistics are computed across a 365-day sliding window. Alongside the four dimension rates, a consistency score measures week-to-week variance in distortion behavior — high consistency = more reliable signal, low consistency = noisier profile.</div>
+          <div class="step-detail">Consistency above 70 means the pattern is structural, not episodic. Gaming resistance: an account cannot selectively reduce its score without abandoning its core content strategy across weeks of posting history.</div>
+        </div>
+      </div>
+
+      <div class="note-box">
+        <strong>What this system does not do:</strong> It makes no claims about factual accuracy, does not judge whether something is objectively significant, and does not issue verdicts. The goal is reader calibration — not account punishment. The signal is always the pattern across posts over time, never any single claim.
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 4 · WATCHLIST
+    ════════════════════════════════════════════════════ -->
+    <div id="tab-accounts" class="tab-pane">
+      <p class="section-label" style="margin-bottom:14px">Tracked accounts</p>
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th>Domain</th>
+            <th>Posts</th>
+            <th>Index</th>
+            <th>Consistency</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody id="watchlist-body">
+          <tr onclick="loadProfile('techguruglobal','Tech Guru Global','TG')" style="cursor:pointer">
+            <td>@techguruglobal</td><td>AI / Tech</td><td>312</td><td>87</td><td>91</td>
+            <td><span class="risk-pill risk-high">High</span></td>
+          </tr>
+          <tr>
+            <td>@cryptovisionpro</td><td>Finance</td><td>489</td><td>91</td><td>95</td>
+            <td><span class="risk-pill risk-high">High</span></td>
+          </tr>
+          <tr>
+            <td>@healthhacksdaily</td><td>Health</td><td>207</td><td>73</td><td>68</td>
+            <td><span class="risk-pill risk-mid">Moderate</span></td>
+          </tr>
+          <tr>
+            <td>@aifirstnewsletter</td><td>AI / Tech</td><td>156</td><td>55</td><td>52</td>
+            <td><span class="risk-pill risk-mid">Moderate</span></td>
+          </tr>
+          <tr>
+            <td>@deepresearchlab</td><td>AI / Tech</td><td>98</td><td>22</td><td>31</td>
+            <td><span class="risk-pill risk-low">Low</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <button class="add-btn" onclick="document.getElementById('modal').classList.add('open')">
+        <i class="ti ti-plus" aria-hidden="true"></i>
+        Add account to watchlist
+      </button>
+      <div style="margin-top:12px; font-size:12px; color:var(--color-text-tertiary);">
+        Cold-start threshold: the tool is most useful once at least 20 accounts are tracked. Currently 5/20.
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 5 · RESEARCH  (§5 + §7)
+    ════════════════════════════════════════════════════ -->
+    <div id="tab-research" class="tab-pane">
+
+      <!-- Corpus stats -->
+      <p class="section-label">Corpus overview</p>
+      <div class="research-stat-grid">
+        <div class="r-stat">
+          <div class="r-stat-num">1,262</div>
+          <div class="r-stat-label">Total posts in corpus</div>
+          <div class="r-stat-sub">across 5 accounts</div>
+        </div>
+        <div class="r-stat">
+          <div class="r-stat-num">847</div>
+          <div class="r-stat-label">Auto-annotated</div>
+          <div class="r-stat-sub">confidence ≥ 70%</div>
+        </div>
+        <div class="r-stat">
+          <div class="r-stat-num">38</div>
+          <div class="r-stat-label">Pending human review</div>
+          <div class="r-stat-sub">confidence &lt; 70%</div>
+        </div>
+        <div class="r-stat">
+          <div class="r-stat-num">29</div>
+          <div class="r-stat-label">Archived deleted posts</div>
+          <div class="r-stat-sub">preserved before removal</div>
+        </div>
+      </div>
+
+      <!-- Export -->
+      <p class="section-label">Data export</p>
+      <div class="export-row">
+        <button class="export-btn" onclick="exportData('jsonl')">
+          <i class="ti ti-download" aria-hidden="true"></i>Export annotated corpus (JSONL)
+        </button>
+        <button class="export-btn" onclick="exportData('csv')">
+          <i class="ti ti-download" aria-hidden="true"></i>Export profile time series (CSV)
+        </button>
+        <button class="export-btn" onclick="exportData('deleted')">
+          <i class="ti ti-download" aria-hidden="true"></i>Export deleted post archive
+        </button>
+      </div>
+
+      <!-- Human annotation queue -->
+      <p class="section-label">Human annotation queue</p>
+      <p style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:12px">
+        Posts where the classifier confidence was below 70% — label each to improve the model.
+      </p>
+
+      <div class="annotation-queue" id="annotation-queue">
+
+        <div class="annotation-card" id="ann-1">
+          <div class="annotation-text">"What I'm seeing from the inside of every major AI lab right now is unlike anything before. The next 6 months will separate the people who understood this from those who didn't."</div>
+          <div class="annotation-prompt">What type of distortion is this? (select all that apply, or None)</div>
+          <div class="annotation-btns">
+            <button class="ann-btn" onclick="toggleAnn(this,'inflate','ann-1')">Significance inflation</button>
+            <button class="ann-btn" onclick="toggleAnn(this,'anxiety','ann-1')">Anxiety manufacturing</button>
+            <button class="ann-btn" onclick="toggleAnn(this,'novelty','ann-1')">Novelty claim</button>
+            <button class="ann-btn" onclick="toggleAnn(this,'temporal','ann-1')">Temporal distortion</button>
+            <button class="ann-btn" onclick="submitAnn('ann-1')">Submit ✓</button>
+          </div>
+        </div>
+
+        <div class="annotation-card" id="ann-2">
+          <div class="annotation-text">"The framework we released last year predicted exactly what's happening now. Sharing the original thread for context."</div>
+          <div class="annotation-prompt">What type of distortion is this? (select all that apply, or None)</div>
+          <div class="annotation-btns">
+            <button class="ann-btn" onclick="toggleAnn(this,'inflate','ann-2')">Significance inflation</button>
+            <button class="ann-btn" onclick="toggleAnn(this,'anxiety','ann-2')">Anxiety manufacturing</button>
+            <button class="ann-btn" onclick="toggleAnn(this,'novelty','ann-2')">Novelty claim</button>
+            <button class="ann-btn" onclick="toggleAnn(this,'temporal','ann-2')">Temporal distortion</button>
+            <button class="ann-btn" onclick="submitAnn('ann-2')">Submit ✓</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- §5 Behavior change research question -->
+      <p class="section-label">Behavior change research question</p>
+      <div class="behavior-note">
+        <div class="behavior-note-title">Does seeing a distortion profile change how you read this account?</div>
+        <div class="behavior-note-desc">The core research question: exposure to distortion profiles may not reduce consumption of anxiety-manufacturing content, because the anxiety itself is engaging. User interaction data from this tool (with consent) enables studying this at scale.</div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="ann-btn" onclick="logBehavior('less')">I'll trust this account less</button>
+          <button class="ann-btn" onclick="logBehavior('same')">My reading habits won't change</button>
+          <button class="ann-btn" onclick="logBehavior('more')">I still find the content useful</button>
+          <button class="ann-btn" onclick="logBehavior('unfollow')">I'll unfollow</button>
+        </div>
+        <div id="behavior-logged" style="display:none;margin-top:8px;font-size:12px;color:var(--color-text-tertiary)">Response logged. Thank you — this contributes to the behavioral dataset.</div>
+      </div>
+
+      <!-- §7 Gaming resistance signal -->
+      <p class="section-label">Gaming resistance monitoring</p>
+      <div class="behavior-note">
+        <div class="behavior-note-title">Is @techguruglobal aware of being profiled?</div>
+        <div class="behavior-note-desc">Accounts that know they are being tracked sometimes selectively reduce distortion signals. The system monitors for sudden behavioral shifts inconsistent with historical baseline.</div>
+        <div class="gaming-timeline" style="margin-top:12px">
+          <div class="gaming-event">
+            <div class="gaming-dot flag"></div>
+            <div class="gaming-event-text"><strong>Jun 9:</strong> Profile first exposed publicly. Distortion rate in week following: 84% (within normal range — no gaming detected).</div>
+          </div>
+          <div class="gaming-event">
+            <div class="gaming-dot"></div>
+            <div class="gaming-event-text"><strong>Jun 14–21:</strong> Distortion rate 87–91%. No statistically significant change from pre-exposure baseline of 83%.</div>
+          </div>
+          <div class="gaming-event">
+            <div class="gaming-dot"></div>
+            <div class="gaming-event-text"><strong>Verdict:</strong> No gaming behavior detected. An inflator cannot selectively moderate without abandoning their core content strategy — the historical window is too long to reverse quickly.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /card -->
+</div><!-- /container -->
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-box">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Analyzing account</div>
+    <div class="loading-sub" id="loading-sub">Collecting post history…</div>
+  </div>
+</div>
+
+<!-- Add account modal -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-title">Add account to watchlist</div>
+    <label>Handle or URL</label>
+    <input type="text" id="new-handle" placeholder="@handle or https://twitter.com/..." />
+    <label>Domain</label>
+    <select id="new-domain">
+      <option>AI / Tech</option>
+      <option>Finance</option>
+      <option>Health</option>
+      <option>Politics</option>
+      <option>Other</option>
+    </select>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="document.getElementById('modal').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" onclick="addAccount()">Add account</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  const API = 'http://localhost:8002/api';
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  const tickColor = isDark ? '#666' : '#aaa';
+  let trendChart = null;
+  let currentHandle = 'techguruglobal';
+  const annState = {};
+
+  function switchTab(name, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    el.classList.add('active');
+    if (name === 'posts') loadPosts(currentHandle, 'all');
+    if (name === 'accounts') loadWatchlist();
+    if (name === 'research') loadResearch(currentHandle);
+  }
+
+  function animateBars() {
+    document.querySelectorAll('.bar-fill[data-width]').forEach(el => {
+      setTimeout(() => { el.style.width = el.dataset.width + '%'; }, 120);
+    });
+  }
+
+  function initChart(labels, data) {
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Distortion rate',
+          data,
+          borderColor: '#E24B4A',
+          backgroundColor: isDark ? 'rgba(226,75,74,0.12)' : 'rgba(226,75,74,0.07)',
+          fill: true, tension: 0.35, pointRadius: 3.5,
+          pointBackgroundColor: '#E24B4A',
+          pointBorderColor: isDark ? '#1e1e1c' : '#ffffff',
+          pointBorderWidth: 1.5, borderWidth: 1.5
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ' ' + Math.round(ctx.parsed.y) + '%' } }
+        },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, maxRotation: 0 } },
+          y: { min: 0, max: 100, grid: { color: gridColor },
+            ticks: { color: tickColor, font: { size: 11 }, callback: v => v + '%' } }
+        }
+      }
+    });
+  }
+
+  initChart(
+    ['W1','W2','W3','W4','W5','W6','W7','W8','W9','W10','W11','W12','W13'],
+    [72,75,71,78,82,79,84,81,87,91,88,85,87]
+  );
+
+  async function runAnalysis() {
+    const raw = document.getElementById('handle-input').value.trim();
+    if (!raw) return;
+    const handle = raw.replace(/^@/, '').toLowerCase();
+    currentHandle = handle;
+    const loading = document.getElementById('loading');
+    const sub = document.getElementById('loading-sub');
+    loading.classList.add('open');
+    const steps = ['Collecting post history…','Extracting transcripts…','Running pattern detection…','Cross-referencing publish dates…','Aggregating profile…'];
+    let i = 0;
+    const ticker = setInterval(() => { if (i < steps.length) sub.textContent = steps[i++]; }, 900);
+    try {
+      const res = await fetch(`${API}/analyze/${handle}`, { method: 'POST' });
+      clearInterval(ticker);
+      loading.classList.remove('open');
+      if (!res.ok) { const err = await res.json().catch(() => ({})); showToast('Error: ' + (err.detail || res.status)); return; }
+      const data = await res.json();
+      renderProfile(data);
+      showToast(`Analyzed @${handle} — ${data.new_posts_crawled} new posts`);
+    } catch (e) {
+      clearInterval(ticker);
+      loading.classList.remove('open');
+      showToast('Cannot reach backend — is it running on :8000?');
+    }
+  }
+
+  document.getElementById('handle-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runAnalysis();
+  });
+
+  function renderProfile(data) {
+    const { account, profile } = data;
+    const clean = account.handle;
+    document.getElementById('avatar-initials').textContent = (account.display_name || clean).slice(0,2).toUpperCase();
+    document.getElementById('profile-name').textContent = account.display_name || clean;
+    document.getElementById('profile-handle').textContent = `@${clean} · ${account.platform || 'Twitter/X'}`;
+    document.querySelector('.badge-score').textContent = profile.distortion_index;
+    const pct = v => Math.round(v * 100) + '%';
+    const cards = document.querySelectorAll('.metric-value');
+    if (cards[0]) cards[0].textContent = pct(profile.significance_inflation_rate);
+    if (cards[1]) cards[1].textContent = pct(profile.anxiety_manufacturing_rate);
+    if (cards[2]) cards[2].textContent = pct(profile.novelty_claim_rate);
+    if (cards[3]) cards[3].textContent = pct(profile.loaded_language_rate);
+    if (cards[4]) cards[4].textContent = pct(profile.temporal_distortion_rate);
+    const ringScore = Math.round(profile.consistency_score * 100);
+    const ringText = document.querySelector('.consistency-ring-wrap svg text:first-of-type');
+    if (ringText) ringText.textContent = ringScore;
+    const windowEl = document.getElementById('profile-window');
+    if (windowEl && profile.window_days != null) {
+      windowEl.innerHTML = `<i class="ti ti-calendar" aria-hidden="true"></i> Tracked ${profile.window_days} days`;
+    }
+    const fmtCount = n => {
+      if (n == null) return '—';
+      if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(n);
+    };
+    const followersEl = document.getElementById('profile-followers');
+    if (followersEl) {
+      followersEl.innerHTML = `<i class="ti ti-users" aria-hidden="true"></i> ${fmtCount(account.followers)} followers`;
+    }
+    const postCountEl = document.getElementById('profile-postcount');
+    if (postCountEl && profile.total_posts_analyzed != null) {
+      postCountEl.innerHTML = `<i class="ti ti-file-text" aria-hidden="true"></i> ${profile.total_posts_analyzed} posts analyzed`;
+    }
+    const delText = document.querySelector('.deletion-text');
+    if (delText) {
+      const delRate = (profile.deletion_rate * 100).toFixed(1);
+      delText.innerHTML = `<strong>${profile.deleted_count} posts deleted</strong> in the last ${profile.window_days} days (${delRate}% deletion rate). Deletions cluster within 48h of posting — consistent with performance-testing and rapid removal of underperforming content.`;
+    }
+    animateBars();
+    loadPatterns(clean);
+    loadInsights(profile, clean);
+    loadTrend(clean);
+  }
+
+  async function loadPosts(handle, filterType) {
+    const list = document.getElementById('posts-list');
+    list.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0">Loading…</p>';
+    const deleted = filterType === 'deleted';
+    const typeParam = (!deleted && filterType !== 'all') ? `&distortion_type=${filterType}` : '';
+    const delParam = deleted ? '&deleted_only=true' : '';
+    try {
+      const res = await fetch(`${API}/posts/${handle}?limit=20${typeParam}${delParam}`);
+      if (!res.ok) { list.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary)">No data yet — run Analyze first.</p>'; return; }
+      const data = await res.json();
+      renderPosts(data.posts);
+    } catch { list.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary)">Backend not reachable.</p>'; }
+  }
+
+  function renderPosts(posts) {
+    const list = document.getElementById('posts-list');
+    if (!posts.length) { list.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0">No posts match this filter.</p>'; return; }
+    const tagMap = { inflate: 'tag-inflate', anxiety: 'tag-anxiety', novelty: 'tag-novelty', temporal: 'tag-temporal' };
+    const labelMap = { inflate: 'Significance inflation', anxiety: 'Anxiety manufacturing', novelty: 'Novelty claim', temporal: 'Temporal distortion' };
+    list.innerHTML = posts.map(p => {
+      const date = new Date(p.posted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const conf = Math.round(p.confidence * 100);
+      const tags = p.distortion_types.map(t => `<span class="tag ${tagMap[t] || ''}">${labelMap[t] || t}</span>`).join('');
+      const deletedTag = p.deleted ? '<span class="tag tag-deleted">Deleted</span>' : '';
+      const signals = p.trigger_signals.length ? `<span class="post-reason">Signals: "${p.trigger_signals.slice(0,3).join('", "')}"</span>` : '';
+      const temporal = (p.temporal_gap_days && p.temporal_gap_days > 30) ? `<div class="temporal-detail"><i class="ti ti-clock" aria-hidden="true"></i>Linked article originally published ${p.temporal_gap_days} days before this post</div>` : '';
+      const prefix = p.deleted ? '<span style="color:var(--color-text-tertiary);font-style:italic">[Deleted — archived] </span>' : '';
+      return `<div class="post-card"><div class="post-top"><div class="post-text">${prefix}${escHtml(p.content)}</div><div class="post-date">${date}${p.deleted ? ' ✕' : ''}</div></div><div class="post-meta">${signals}<span class="post-confidence">Confidence ${conf}%</span></div>${temporal}<div class="post-tags" style="margin-top:8px">${tags}${deletedTag}</div></div>`;
+    }).join('');
+  }
+
+  function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function filterPosts(type, el) {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    loadPosts(currentHandle, type);
+  }
+
+  async function loadWatchlist() {
+    try {
+      const res = await fetch(`${API}/watchlist`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const tbody = document.getElementById('watchlist-body');
+      const riskClass = { high: 'risk-high', moderate: 'risk-mid', low: 'risk-low', pending: 'risk-pending' };
+      const riskLabel = { high: 'High', moderate: 'Moderate', low: 'Low', pending: 'Pending' };
+      tbody.innerHTML = data.accounts.map(a => `<tr onclick="loadProfileFromWatchlist('${a.handle}')" style="cursor:pointer"><td>@${a.handle}</td><td>${a.domain||'—'}</td><td>${a.distortion_index??'—'}</td><td>${a.consistency_score!=null?a.consistency_score:'—'}</td><td><span class="risk-pill ${riskClass[a.risk]||'risk-pending'}">${riskLabel[a.risk]||'Pending'}</span></td></tr>`).join('');
+    } catch {}
+  }
+
+  async function loadProfileFromWatchlist(handle) {
+    currentHandle = handle;
+    document.getElementById('handle-input').value = '@' + handle;
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-profile').classList.add('active');
+    document.querySelector('.tab').classList.add('active');
+    try {
+      const res = await fetch(`${API}/profile/${handle}`);
+      if (res.ok) { const data = await res.json(); renderProfile({ ...data, new_posts_crawled: 0 }); }
+    } catch {}
+    showToast('Loaded @' + handle);
+  }
+
+  async function addAccount() {
+    const handle = document.getElementById('new-handle').value.trim();
+    const domain = document.getElementById('new-domain').value;
+    if (!handle) return;
+    try {
+      const res = await fetch(`${API}/watchlist`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handle, domain }) });
+      document.getElementById('new-handle').value = '';
+      document.getElementById('modal').classList.remove('open');
+      if (res.status === 409) { showToast('Account already in watchlist'); return; }
+      showToast('Added @' + handle.replace(/^@/,'') + ' — run Analyze to start tracking');
+      loadWatchlist();
+    } catch { showToast('Backend not reachable'); }
+  }
+
+  async function loadResearch(handle) {
+    try {
+      const res = await fetch(`${API}/annotation-queue/${handle}?limit=5`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const queue = document.getElementById('annotation-queue');
+      if (!data.posts.length) { queue.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary)">No posts pending annotation.</p>'; return; }
+      queue.innerHTML = data.posts.map(p => `<div class="annotation-card" id="ann-${p.id}"><div class="annotation-text">${escHtml(p.content)}</div><div class="annotation-prompt">What type of distortion is this?</div><div class="annotation-btns"><button class="ann-btn" onclick="toggleAnn(this,'inflate','ann-${p.id}')">Significance inflation</button><button class="ann-btn" onclick="toggleAnn(this,'anxiety','ann-${p.id}')">Anxiety manufacturing</button><button class="ann-btn" onclick="toggleAnn(this,'novelty','ann-${p.id}')">Novelty claim</button><button class="ann-btn" onclick="toggleAnn(this,'temporal','ann-${p.id}')">Temporal distortion</button><button class="ann-btn" onclick="submitAnn('ann-${p.id}',${p.id})">Submit ✓</button></div></div>`).join('');
+    } catch {}
+  }
+
+  function toggleAnn(btn, type, cardId) {
+    if (!annState[cardId]) annState[cardId] = new Set();
+    const cls = 'selected-' + type;
+    if (btn.classList.contains(cls)) { btn.classList.remove(cls); annState[cardId].delete(type); }
+    else { btn.classList.add(cls); annState[cardId].add(type); }
+  }
+
+  async function submitAnn(cardId, postId) {
+    const types = annState[cardId] ? [...annState[cardId]] : [];
+    try { await fetch(`${API}/annotate/${postId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ types }) }); } catch {}
+    const card = document.getElementById(cardId);
+    card.style.opacity = '0.4'; card.style.pointerEvents = 'none';
+    showToast('Annotation saved: ' + (types.join(', ') || 'none'));
+  }
+
+  async function logBehavior(response) {
+    document.getElementById('behavior-logged').style.display = 'block';
+    try { await fetch(`${API}/behavior-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handle: currentHandle, response }) }); } catch {}
+    showToast('Response logged');
+  }
+
+  function exportData(type) {
+    if (type === 'jsonl') window.open(`${API}/export/${currentHandle}/jsonl`, '_blank');
+    else showToast('CSV export coming soon');
+  }
+
+  function clearPatterns() {
+    for (let i = 0; i < 5; i++) {
+      const row = document.getElementById('pat-' + i);
+      if (!row) continue;
+      const pctEl  = row.querySelector('.bar-pct');
+      const fillEl = row.querySelector('.bar-fill');
+      if (pctEl)  { pctEl.textContent = '0%'; pctEl.style.color = '#3B6D11'; }
+      if (fillEl) { fillEl.className = 'bar-fill bar-low'; fillEl.style.width = '0%'; }
+    }
+  }
+
+  async function loadPatterns(handle) {
+    clearPatterns();  // 先清空，防止显示上一个账号的数据
+    try {
+      const res = await fetch(`${API}/patterns/${handle}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.patterns || data.total === 0) return;
+      const colorMap = {
+        high: { text: '#A32D2D', bar: 'bar-high' },
+        mid:  { text: '#854F0B', bar: 'bar-mid'  },
+        low:  { text: '#3B6D11', bar: 'bar-low'  },
+      };
+      data.patterns.forEach((p, i) => {
+        const row = document.getElementById('pat-' + i);
+        if (!row) return;
+        const pct = p.pct;
+        const color = pct >= 30 ? 'high' : pct >= 10 ? 'mid' : 'low';
+        const pctEl  = row.querySelector('.bar-pct');
+        const fillEl = row.querySelector('.bar-fill');
+        if (pctEl)  { pctEl.textContent = pct + '%'; pctEl.style.color = colorMap[color].text; }
+        if (fillEl) {
+          fillEl.className = 'bar-fill ' + colorMap[color].bar;
+          setTimeout(() => { fillEl.style.width = pct + '%'; }, 150);
+        }
+      });
+    } catch (e) { console.warn('patterns:', e); }
+  }
+
+  // ── Dynamic Key Insights ────────────────────────────────────────
+  function loadInsights(profile, handle) {
+    const container = document.getElementById('key-insights-container');
+    if (!container) return;
+    const idx   = profile.distortion_index;
+    const cons  = Math.round(profile.consistency_score * 100);
+    const del   = profile.deletion_rate * 100;
+    const temp  = Math.round(profile.temporal_distortion_rate * 100);
+    const anx   = Math.round(profile.anxiety_manufacturing_rate * 100);
+    const inf   = Math.round(profile.significance_inflation_rate * 100);
+    const nov   = Math.round(profile.novelty_claim_rate * 100);
+    const total = profile.total_posts_analyzed;
+
+    const cards = [];
+
+    // ── Insight 1: Overall distortion level ──────────────────────
+    if (idx <= 20) {
+      cards.push({ icon: 'ti-circle-check', text: `<strong>Low distortion profile.</strong> Distortion index ${idx}/100 — this account uses relatively straightforward language without heavy reliance on urgency, novelty, or anxiety-manufacturing rhetoric. Consistency score ${cons}/100 confirms this is a stable pattern across ${total} posts analyzed.` });
+    } else if (idx <= 50) {
+      cards.push({ icon: 'ti-info-circle', text: `<strong>Moderate distortion detected.</strong> Distortion index ${idx}/100. Some posts use urgency or significance-inflation framing, but it is not the dominant style. Consistency score ${cons}/100 — ${cons >= 70 ? 'the pattern is stable enough to be meaningful' : 'the pattern varies week to week, suggesting it may be situational rather than systematic'}.` });
+    } else {
+      cards.push({ icon: 'ti-alert-triangle', text: `<strong>High distortion — consistent pattern, not noise.</strong> Distortion index ${idx}/100. Consistency score ${cons}/100 means this is a stable behavioral style across ${total} posts, not occasional overstatement. High-consistency profiles above index 50 are considered reliable signals for reader calibration.` });
+    }
+
+    // ── Insight 2: Temporal distortion ───────────────────────────
+    if (temp >= 10) {
+      cards.push({ icon: 'ti-refresh', text: `<strong>${temp}% of posts show temporal distortion.</strong> Content is framed as new or breaking but links to articles published significantly earlier. This pattern suggests the account consistently presents older content as timely to manufacture a sense of urgency.` });
+    } else if (temp > 0) {
+      cards.push({ icon: 'ti-refresh', text: `<strong>Minor temporal distortion (${temp}%).</strong> A small number of posts frame older content as recent. This is within normal range for most content creators and does not indicate a systematic pattern.` });
+    } else {
+      cards.push({ icon: 'ti-refresh', text: `<strong>No temporal distortion detected.</strong> Posts accurately represent the recency of the content they reference. Links were published close to the date they were shared.` });
+    }
+
+    // ── Insight 3: Deletion signal ────────────────────────────────
+    if (del >= 5) {
+      cards.push({ icon: 'ti-trash', text: `<strong>Elevated deletion rate (${del.toFixed(1)}%) — worth noting.</strong> ${profile.deleted_count} posts were deleted out of ${total} analyzed. Deletions concentrated within 48h of posting suggest rapid removal of underperforming content rather than error correction, which is itself a signal about content strategy.` });
+    } else if (del > 0) {
+      cards.push({ icon: 'ti-trash', text: `<strong>Low deletion rate (${del.toFixed(1)}%).</strong> ${profile.deleted_count} post${profile.deleted_count > 1 ? 's were' : ' was'} deleted. This is within normal range and does not indicate a systematic pattern of testing and removing content.` });
+    } else {
+      cards.push({ icon: 'ti-trash', text: `<strong>No deleted posts detected.</strong> All analyzed posts remain published. No deletion signal to report.` });
+    }
+
+    // ── Insight 4: What this means ────────────────────────────────
+    if (idx <= 20) {
+      cards.push({ icon: 'ti-eye', text: `<strong>What this means for you:</strong> This account's content can generally be read at face value. Significance and urgency claims tend to reflect actual content rather than rhetorical amplification. Normal critical reading applies.` });
+    } else if (idx <= 50) {
+      cards.push({ icon: 'ti-eye', text: `<strong>What this means for you:</strong> Apply moderate skepticism to urgency and novelty claims from this account. Some posts inflate significance or manufacture anxiety, but it is not the dominant pattern. Check linked sources when timing or exclusivity is claimed.` });
+    } else {
+      cards.push({ icon: 'ti-eye', text: `<strong>What this means for you:</strong> This account applies high-urgency framing to most content regardless of actual significance. Treat all claims of novelty or urgency with calibrated skepticism. The consistency of the pattern (${cons}/100) suggests it is intentional rather than incidental.` });
+    }
+
+    container.innerHTML = cards.map(c => `
+      <div class="insight-card">
+        <i class="ti ${c.icon} insight-icon" aria-hidden="true"></i>
+        <div class="insight-text">${c.text}</div>
+      </div>`).join('');
+  }
+
+  // ── Real 90-day trend from API ──────────────────────────────────
+  async function loadTrend(handle) {
+    try {
+      const res = await fetch(`${API}/trend/${handle}`);
+      if (!res.ok) throw new Error('no trend data');
+      const data = await res.json();
+      initChart(data.labels, data.values);
+    } catch {
+      // Fallback: flat line at distortion index level
+      const idx = parseInt(document.querySelector('.badge-score')?.textContent || '0');
+      const flat = Array.from({length: 13}, () => idx);
+      initChart(['W1','W2','W3','W4','W5','W6','W7','W8','W9','W10','W11','W12','W13'], flat);
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  animateBars();
+  (async () => {
+    try { const res = await fetch(`${API}/profile/${currentHandle}`); if (res.ok) { const data = await res.json(); renderProfile({ ...data, new_posts_crawled: 0 }); } } catch {}
+  })();
+</script>
+</body>
+</html>

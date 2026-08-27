@@ -1,0 +1,30 @@
+# Secrets — set these as Railway environment variables instead
+.env
+*.env
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Local research output / experiment artifacts (not needed at runtime)
+research_results/
+research_results_*/
+data/*.db
+{app/
+
+# One-off scripts and tests not used by the running API
+experiment_*.py
+reclassify_*.py
+rerun_*.py
+test_*.py
+debug_*.py
+find_*.py
+clear_*.py
+recompute_*.py
+compute_*.py
+*.txt
+!requirements.txt

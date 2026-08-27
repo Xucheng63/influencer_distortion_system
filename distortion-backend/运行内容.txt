@@ -1,0 +1,10 @@
+
+
+
+一方面social science 有几个问题。概念需要definition，需要好好定义怎么定义。 定义的这些维度的根据是什么，要有依据从其他领域像修辞学方面。framing theory。information quality讲究accuracy 可信性presentation这种可以加一个维度在这里。 information science方面，你的reasearch question是什么，你的框架，要找研究依据文献（修辞学，informal logic，framing theory，逻辑妙悟）研究怎么用语言来表达。目前的东西非常多主观，不是每个东西是有迹可循的，别人无法信服凭啥你说啥是啥。core，每一个概念都要搞清楚人家是怎么定义的官方怎么定义的你是怎么定义的，一不一样为什么不一样，考虑各个相关领域哪些相关概念再把它考虑。定量打分的这个分数必须要make sense，必须要有理有据，这个分数规则必须要有理有据。抽取的方法也要研究。把我的方法详细的写出来。每一步必须要有更有据，比如每一步都有research论文文献依据，可以经得起别人的质疑。
+
+规则维度上面重新研究打磨，把这个词找找文献定义然后有哪些维度，维度是反应概念的。比如llm说的hetorical distortion is the systematic departure from rhetorical proportionality.
+Rhetorical proportionality is the degree to which linguistic framing reflects the evidential strength, importance, urgency, novelty, and emotional implications of the underlying information.
+
+Ai的impact是从系统来，系统上线了大家都可以用。 Document。一个公众号发了什么都可以接入我们系统。
+uiuc library搜文献可以的
