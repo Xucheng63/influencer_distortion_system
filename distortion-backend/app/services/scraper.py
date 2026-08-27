@@ -391,6 +391,69 @@ def _scrape_twitter_sync(username: str, max_tweets: int = 50) -> list[dict]:
                       f"articles={_arts} tweetText={_tt} body_snippet={_body!r} — continuing anyway")
             _time.sleep(2)
 
+            # ── 强制加载最新推文 ────────────────────────────────────────────
+            # Render 上实测：直接落地 profile 时，时间轴可能停在很旧的位置
+            # （抓到 2020-2021 的旧推），且顶部常有「See new posts」待加载横幅。
+            # 这里：点掉横幅 → 滚回顶部 → 若顶部推文仍很旧则整页重载一次，
+            # 尽量让时间轴呈现最新推文。
+            def _top_date():
+                try:
+                    return page.evaluate(
+                        """() => {
+                            const t = document.querySelector('article time');
+                            return t ? (t.getAttribute('datetime') || '') : '';
+                        }"""
+                    ) or ""
+                except Exception:
+                    return ""
+
+            def _click_see_new_posts():
+                # 「See new posts」/「Show new posts」按钮：点击后加载最新推文
+                for sel in (
+                    '[data-testid="cellInnerDiv"] [role="button"]:has-text("new posts")',
+                    'div[role="button"]:has-text("new posts")',
+                    'a:has-text("new posts")',
+                ):
+                    try:
+                        btn = page.query_selector(sel)
+                        if btn:
+                            btn.click(timeout=3000)
+                            _time.sleep(2)
+                            return True
+                    except Exception:
+                        continue
+                return False
+
+            _STALE_DAYS = 400  # 顶部推文比这更旧就认为时间轴过时，触发重载
+
+            def _is_stale(iso: str) -> bool:
+                if not iso:
+                    return True
+                try:
+                    dt = datetime.fromisoformat(iso.replace("Z", "+00:00")).replace(tzinfo=None)
+                except Exception:
+                    return False
+                return (datetime.utcnow() - dt).days > _STALE_DAYS
+
+            for _attempt in range(2):
+                _click_see_new_posts()
+                page.evaluate("window.scrollTo(0, 0)")
+                _time.sleep(1.5)
+                _click_see_new_posts()
+                top = _top_date()
+                print(f"[scraper] Twitter @{username}: top tweet date={top!r} "
+                      f"(attempt {_attempt + 1})")
+                if not _is_stale(top):
+                    break
+                # 顶部仍是旧推 → 硬重载再试一次
+                print(f"[scraper] Twitter @{username}: timeline looks stale, reloading")
+                try:
+                    page.reload(wait_until="domcontentloaded", timeout=120000)
+                    page.wait_for_selector('[data-testid="tweetText"]', timeout=45000)
+                    _time.sleep(2)
+                except Exception:
+                    pass
+
             # X 采用虚拟滚动：向下滚动后，顶部（最新）推文会被移出 DOM。
             # 旧逻辑「先滚动 6 次再一次性提取」只会拿到较旧的推文，丢失最新几条。
             # 修复：边滚边累积——每次滚动后立即提取当前 DOM 内的推文并按 url 去重。
@@ -441,7 +504,11 @@ def _scrape_twitter_sync(username: str, max_tweets: int = 50) -> list[dict]:
                 reverse=True,
             )[:max_tweets]
 
-            # 逐条进入详情页获取完整正文（含线程）
+            # 逐条进入详情页获取完整正文（含线程）。
+            # 每条要 goto + go_back，50 条可耗时数分钟（实测 ~298s，逼近网关超时）。
+            # 加一个墙钟预算：超时后就用时间轴已抓到的正文，不再逐条深挖，
+            # 保证整体在合理时间内返回。
+            _detail_deadline = _time.time() + float(os.getenv("TWITTER_DETAIL_BUDGET_SEC", "120"))
             for item in (raw or []):
                 text     = item.get("text", "").strip()
                 post_url = item.get("url", "")
@@ -449,6 +516,21 @@ def _scrape_twitter_sync(username: str, max_tweets: int = 50) -> list[dict]:
                     continue
 
                 full_text = text
+                if _time.time() > _detail_deadline:
+                    # 预算用尽：直接用时间轴正文，跳过详情页深挖
+                    date_str = item.get("date", "")
+                    try:
+                        posted_dt = datetime.fromisoformat(
+                            date_str.replace("Z", "+00:00")).replace(tzinfo=None) if date_str else datetime.utcnow()
+                    except Exception:
+                        posted_dt = datetime.utcnow()
+                    tweets.append({
+                        "platform_id": hashlib.md5(post_url.encode()).hexdigest()[:12],
+                        "content":     full_text[:500],
+                        "posted_at":   posted_dt,
+                        "linked_url":  post_url,
+                    })
+                    continue
                 try:
                     page.goto(post_url, wait_until="commit", timeout=120000)
                     _time.sleep(2)
