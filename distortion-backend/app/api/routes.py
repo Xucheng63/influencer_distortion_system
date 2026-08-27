@@ -103,6 +103,8 @@ async def get_profile(handle: str, session: SessionDep):
         "account": {
             "handle": account.handle,
             "display_name": account.display_name,
+            # platform 存在库里但历史响应漏了序列化；为未分析账号回退到 detect_platform。
+            "platform": account.platform or pipeline.detect_platform(account.handle),
             "followers": account.followers,
             "last_crawled": account.last_crawled.isoformat() if account.last_crawled else None,
         },
@@ -318,6 +320,7 @@ async def get_watchlist(session: SessionDep):
         rows.append({
             "handle": acc.handle,
             "display_name": acc.display_name,
+            "platform": acc.platform or pipeline.detect_platform(acc.handle),
             "domain": acc.domain,
             "followers": acc.followers,
             "distortion_index": index,
