@@ -1,0 +1,25 @@
+# Render Blueprint for the distortion detection backend.
+# Render's headless-browser support runs Playwright/Chromium reliably, unlike
+# Railway's slim container. Deploy: point Render at this repo and set the
+# service Root Directory to "distortion-backend" so this file and the Dockerfile
+# are picked up.
+services:
+  - type: web
+    name: influencer-distortion-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    # Shell form so ${PORT} (injected by Render) is substituted at runtime.
+    dockerCommand: sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    plan: starter
+    autoDeploy: true
+    envVars:
+      # Keep "*" so the GitHub Pages frontend can call the API.
+      - key: CORS_ORIGINS
+        value: "*"
+    # Persist the SQLite database (app/core/database.py writes to ./data).
+    disk:
+      name: distortion-data
+      mountPath: /app/data
+      sizeGB: 1
