@@ -5,8 +5,8 @@ app/services/scheduler.py  —  每日定时刷新 watchlist 账号
 逐个重新分析固定 watchlist，保持数据新鲜。
 """
 from __future__ import annotations
-import logging
 import os
+import traceback
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -14,7 +14,10 @@ from apscheduler.triggers.cron import CronTrigger
 from app.core.database import AsyncSessionLocal
 from app.services import pipeline
 
-logger = logging.getLogger("scheduler")
+# 本项目未配置 logging，自定义 logger 的 INFO 不会进 stdout；沿用 scraper 的
+# print() 约定，保证定时任务的日志能出现在 Render 日志里（flush 确保及时刷新）。
+def _log(msg: str) -> None:
+    print(f"[scheduler] {msg}", flush=True)
 
 # 每日刷新的固定 watchlist（与前端默认 watchlist 保持一致）
 WATCHLIST_HANDLES = [
@@ -43,8 +46,7 @@ async def refresh_watchlist() -> None:
     # 延迟导入，避免 services 层在模块加载期反向依赖 api 层（防循环导入）。
     from app.api.routes import _analyze_semaphore
 
-    logger.info("[scheduler] daily watchlist refresh start (%d accounts)",
-                len(WATCHLIST_HANDLES))
+    _log(f"daily watchlist refresh start ({len(WATCHLIST_HANDLES)} accounts)")
     ok = 0
     for handle in WATCHLIST_HANDLES:
         try:
@@ -52,19 +54,17 @@ async def refresh_watchlist() -> None:
                 async with AsyncSessionLocal() as session:
                     result = await pipeline.run(handle, session)
             ok += 1
-            logger.info("[scheduler] refreshed %s — %s new posts",
-                        handle, result.get("new_posts_crawled"))
+            _log(f"refreshed {handle} — {result.get('new_posts_crawled')} new posts")
         except Exception:
-            logger.exception("[scheduler] failed to refresh %s", handle)
-    logger.info("[scheduler] daily watchlist refresh done (%d/%d ok)",
-                ok, len(WATCHLIST_HANDLES))
+            _log(f"failed to refresh {handle}:\n{traceback.format_exc()}")
+    _log(f"daily watchlist refresh done ({ok}/{len(WATCHLIST_HANDLES)} ok)")
 
 
 def start_scheduler() -> AsyncIOScheduler | None:
     """在应用启动时调用（lifespan 内）。可用 ENABLE_SCHEDULER=0 关闭。"""
     global _scheduler
     if os.getenv("ENABLE_SCHEDULER", "1").strip().lower() in ("0", "false", "no", ""):
-        logger.info("[scheduler] disabled via ENABLE_SCHEDULER")
+        _log("disabled via ENABLE_SCHEDULER")
         return None
     if _scheduler and _scheduler.running:
         return _scheduler
@@ -80,8 +80,7 @@ def start_scheduler() -> AsyncIOScheduler | None:
         misfire_grace_time=3600,
     )
     _scheduler.start()
-    logger.info("[scheduler] started — daily watchlist refresh at %02d:%02d UTC",
-                REFRESH_HOUR, REFRESH_MINUTE)
+    _log(f"started — daily watchlist refresh at {REFRESH_HOUR:02d}:{REFRESH_MINUTE:02d} UTC")
     return _scheduler
 
 
@@ -90,5 +89,5 @@ def shutdown_scheduler() -> None:
     global _scheduler
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=False)
-        logger.info("[scheduler] stopped")
+        _log("stopped")
     _scheduler = None
