@@ -21,11 +21,9 @@ HEADERS = {
 }
 _TIMEOUT = httpx.Timeout(20.0)
 
-# Chromium 启动参数（内存精简版）。
+# Chromium 启动参数。
 # --no-sandbox / --disable-setuid-sandbox: 容器内以 root 运行必需。
-# 其余为降低常驻内存的项：在 Render starter（512MB）上，两个浏览器并发会
-# 触发 OOM Kill（exit 137 / SIGKILL）。配合 routes.py 的并发信号量，
-# 单实例足以稳定运行。
+# 其余为通用的降内存/降噪项，安全无副作用。
 CHROMIUM_LEAN_ARGS = [
     "--no-sandbox",
     "--disable-setuid-sandbox",
@@ -39,9 +37,17 @@ CHROMIUM_LEAN_ARGS = [
     "--no-first-run",
     "--disable-features=site-per-process,TranslateUI",
 ]
-# 注意：曾加过 --single-process / --no-zygote 省内存，但它们会让 x.com 这类
-# 重型 SPA 在容器里渲染失败（推文选择器超时、抓到 0 帖）。既然 analyze 已由
-# 信号量串行化（单浏览器足以放进 512MB），这里移除这两个高风险参数。
+
+# 低内存模式（默认开）：追加 --single-process / --no-zygote，让单个 Chromium
+# 能塞进 Render starter 的 512Mi。代价是 x.com 这类重型 SPA 可能渲染不出推文
+# （抓到 0 帖）。实测在 512Mi 上：
+#   - 开：不崩溃，但 Twitter 抓 0 帖；
+#   - 关：能正常渲染 x.com，但单个浏览器就会 OOM Kill（oomKilled 512Mi）。
+# 因此要真正抓到 Twitter，需把实例升到 ≥2GB（Render standard）后设
+# CHROMIUM_LOW_MEMORY=0 关掉本模式。
+_LOW_MEMORY = os.getenv("CHROMIUM_LOW_MEMORY", "1").strip().lower() not in ("0", "false", "no", "")
+if _LOW_MEMORY:
+    CHROMIUM_LEAN_ARGS += ["--single-process", "--no-zygote"]
 
 FEED_MAP: dict[str, dict] = {
     # RSS/Newsletter — English
