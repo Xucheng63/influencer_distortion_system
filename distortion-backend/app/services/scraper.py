@@ -355,6 +355,18 @@ def _scrape_twitter_sync(username: str, max_tweets: int = 50) -> list[dict]:
         browser, context = _make_twitter_context(p)
         page = context.new_page()
         try:
+            # 先访问首页「预热」会话：直接落地 profile 时，X 常给数据中心 IP
+            # 返回过时/空白时间轴。先在 x.com 首页停留、轻微滚动，让会话看起来
+            # 更像正常浏览，再跳转到目标 profile。
+            try:
+                page.goto("https://x.com/home", wait_until="domcontentloaded", timeout=120000)
+                _time.sleep(3)
+                page.evaluate("window.scrollBy(0, 600)")
+                _time.sleep(1)
+                print(f"[scraper] Twitter @{username}: warmed up on home, url={page.url!r}")
+            except Exception as _e:
+                print(f"[scraper] Twitter @{username}: home warm-up failed: {_e}")
+
             url = f"https://x.com/{username}"
             page.goto(url, wait_until="domcontentloaded", timeout=120000)
 
