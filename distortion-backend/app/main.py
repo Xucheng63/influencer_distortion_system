@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from app.core.database import init_db
 from app.api.routes import router
+from app.services.scheduler import start_scheduler, shutdown_scheduler
 
 load_dotenv()
 
@@ -22,7 +23,9 @@ CORS_ORIGINS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    start_scheduler()      # 每日 06:00 UTC 刷新 watchlist
     yield
+    shutdown_scheduler()
 
 
 app = FastAPI(
