@@ -31,8 +31,6 @@ CHROMIUM_LEAN_ARGS = [
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",          # 不用容器里过小的 /dev/shm，改用磁盘
     "--disable-gpu",
-    "--single-process",                 # 单进程，显著降低常驻内存
-    "--no-zygote",
     "--disable-extensions",
     "--disable-background-networking",
     "--disable-default-apps",
@@ -41,6 +39,9 @@ CHROMIUM_LEAN_ARGS = [
     "--no-first-run",
     "--disable-features=site-per-process,TranslateUI",
 ]
+# 注意：曾加过 --single-process / --no-zygote 省内存，但它们会让 x.com 这类
+# 重型 SPA 在容器里渲染失败（推文选择器超时、抓到 0 帖）。既然 analyze 已由
+# 信号量串行化（单浏览器足以放进 512MB），这里移除这两个高风险参数。
 
 FEED_MAP: dict[str, dict] = {
     # RSS/Newsletter — English
@@ -351,15 +352,33 @@ def _scrape_twitter_sync(username: str, max_tweets: int = 50) -> list[dict]:
             url = f"https://x.com/{username}"
             page.goto(url, wait_until="domcontentloaded", timeout=120000)
 
+            # 诊断：记录落地 URL / 标题，便于区分「数据中心 IP 被拦」与「渲染失败」
+            has_cookies = bool(os.getenv("TWITTER_AUTH_TOKEN")) and bool(os.getenv("TWITTER_CT0"))
+            try:
+                _title = page.title()
+            except Exception:
+                _title = "<title unavailable>"
+            print(f"[scraper] Twitter @{username}: cookies={has_cookies} "
+                  f"landed_url={page.url!r} title={_title!r}")
+
             # 检测是否被重定向到登录页
-            if "login" in page.url or "onboarding" in page.url:
-                print(f"[scraper] Twitter: not logged in for @{username}")
+            if "login" in page.url or "onboarding" in page.url or "flow" in page.url:
+                print(f"[scraper] Twitter: not logged in for @{username} "
+                      f"(redirected to {page.url!r}) — cookie likely invalid or IP blocked")
                 return []
 
             # 等待推文元素出现
             try:
                 page.wait_for_selector('article[data-testid="tweet"]', timeout=15000)
             except Exception:
+                # 诊断：selector 超时 → 页面没渲染出推文。记录文章数与 body 片段。
+                try:
+                    _arts = page.eval_on_selector_all("article", "els => els.length")
+                    _body = (page.inner_text("body") or "")[:280].replace("\n", " ")
+                except Exception as _e:
+                    _arts, _body = "?", f"<body read failed: {_e}>"
+                print(f"[scraper] Twitter @{username}: tweet selector timeout — "
+                      f"articles={_arts} body_snippet={_body!r}")
                 return []
             _time.sleep(2)
 
