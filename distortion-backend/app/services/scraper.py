@@ -311,6 +311,35 @@ async def _fetch_youtube(channel_id: str, max_videos: int = 20) -> list[dict]:
 #   TWITTER_AUTH_TOKEN=your_auth_token
 #   TWITTER_CT0=your_ct0
 
+def _twitter_proxy():
+    """
+    从 TWITTER_PROXY 构造 Playwright 的 proxy 配置。
+    支持带内嵌账号密码的形式：http://user:pass@host:port —— Playwright 的
+    server 字段不接受内嵌凭据，必须拆成独立的 username/password，否则鉴权失败。
+    未设置则返回 None（不走代理）。
+    """
+    raw = os.getenv("TWITTER_PROXY", "").strip()
+    if not raw:
+        return None
+    from urllib.parse import urlparse
+    # 没写协议时补一个，方便 urlparse 解析 host/port
+    parsed = urlparse(raw if "://" in raw else f"http://{raw}")
+    scheme = parsed.scheme or "http"
+    host = parsed.hostname or ""
+    if not host:
+        # 解析失败就按原样传 server，至少不崩
+        return {"server": raw}
+    server = f"{scheme}://{host}" + (f":{parsed.port}" if parsed.port else "")
+    proxy = {"server": server}
+    if parsed.username:
+        proxy["username"] = parsed.username
+    if parsed.password:
+        proxy["password"] = parsed.password
+    print(f"[scraper] Twitter: using proxy server={server!r} "
+          f"auth={'yes' if parsed.username else 'no'}")
+    return proxy
+
+
 def _make_twitter_context(p):
     """创建带 Cookie 的浏览器 context，屏蔽 webdriver 检测"""
     auth_token = os.getenv("TWITTER_AUTH_TOKEN", "")
@@ -318,6 +347,7 @@ def _make_twitter_context(p):
 
     browser = p.chromium.launch(
         headless=True,
+        proxy=_twitter_proxy(),
         args=[*CHROMIUM_LEAN_ARGS, "--disable-blink-features=AutomationControlled"],
     )
     context = browser.new_context(
