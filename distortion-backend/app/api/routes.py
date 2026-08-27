@@ -2,7 +2,9 @@
 app/api/routes.py  —  REST API 端点
 """
 from __future__ import annotations
+import asyncio
 import json
+import os
 from collections import Counter
 from datetime import datetime, timedelta
 from typing import Annotated
@@ -19,6 +21,13 @@ router = APIRouter()
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
+# 并发信号量：每次 analyze 会在线程池里启动一个 Chromium 浏览器抓取。
+# Render starter（512MB）上两个浏览器并发会 OOM Kill（exit 137）。
+# 默认串行（1）——多余请求排队而非把实例打崩；内存更大的实例可通过
+# ANALYZE_CONCURRENCY 环境变量放宽。
+_ANALYZE_CONCURRENCY = max(1, int(os.getenv("ANALYZE_CONCURRENCY", "1")))
+_analyze_semaphore = asyncio.Semaphore(_ANALYZE_CONCURRENCY)
+
 
 # ── 分析账号 ──────────────────────────────────────────────────────────────────
 
@@ -29,7 +38,9 @@ async def analyze_account(handle: str, session: SessionDep):
     前端调用: POST /api/analyze/techguruglobal
     """
     try:
-        result = await pipeline.run(handle, session)
+        # 串行化抓取，避免多个 Chromium 并发导致实例 OOM（见 _analyze_semaphore）。
+        async with _analyze_semaphore:
+            result = await pipeline.run(handle, session)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -21,6 +21,27 @@ HEADERS = {
 }
 _TIMEOUT = httpx.Timeout(20.0)
 
+# Chromium 启动参数（内存精简版）。
+# --no-sandbox / --disable-setuid-sandbox: 容器内以 root 运行必需。
+# 其余为降低常驻内存的项：在 Render starter（512MB）上，两个浏览器并发会
+# 触发 OOM Kill（exit 137 / SIGKILL）。配合 routes.py 的并发信号量，
+# 单实例足以稳定运行。
+CHROMIUM_LEAN_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",          # 不用容器里过小的 /dev/shm，改用磁盘
+    "--disable-gpu",
+    "--single-process",                 # 单进程，显著降低常驻内存
+    "--no-zygote",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--mute-audio",
+    "--no-first-run",
+    "--disable-features=site-per-process,TranslateUI",
+]
+
 FEED_MAP: dict[str, dict] = {
     # RSS/Newsletter — English
     "simonwillison":    {"feed": "https://simonwillison.net/atom/everything/",        "display": "Simon Willison",    "type": "rss"},
@@ -290,8 +311,7 @@ def _make_twitter_context(p):
 
     browser = p.chromium.launch(
         headless=True,
-        args=["--no-sandbox", "--disable-setuid-sandbox",
-              "--disable-blink-features=AutomationControlled"],
+        args=[*CHROMIUM_LEAN_ARGS, "--disable-blink-features=AutomationControlled"],
     )
     context = browser.new_context(
         user_agent=(
@@ -1026,7 +1046,7 @@ def _scrape_weibo_sync(uid: str, max_posts: int = 50) -> list[dict]:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"],
+            args=CHROMIUM_LEAN_ARGS,
         )
         try:
             # ── 首选：桌面 weibo.com 已登录路径（可翻页取到 max_posts 条）──
@@ -1221,7 +1241,7 @@ def _scrape_weibo_info_sync(uid: str) -> dict:
     info = {"display_name": "", "followers": 0}
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"],
+            headless=True, args=CHROMIUM_LEAN_ARGS,
         )
         context = browser.new_context(
             user_agent=(
@@ -1461,7 +1481,7 @@ def _scrape_subreddit_sync(subreddit: str, max_posts: int = 50) -> list[dict]:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
+            args=[*CHROMIUM_LEAN_ARGS, "--disable-blink-features=AutomationControlled"],
         )
         page = browser.new_page(user_agent=(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -1597,7 +1617,7 @@ def _scrape_reddit_user_sync(username: str, max_posts: int = 50) -> list[dict]:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"],
+            args=CHROMIUM_LEAN_ARGS,
         )
         page = browser.new_page(user_agent=(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
