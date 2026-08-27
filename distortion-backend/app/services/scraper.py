@@ -373,31 +373,40 @@ def _scrape_twitter_sync(username: str, max_tweets: int = 50) -> list[dict]:
                       f"(redirected to {page.url!r}) — cookie likely invalid or IP blocked")
                 return []
 
-            # 等待推文元素出现
+            # 等待推文元素出现。按 [data-testid="tweetText"]（推文正文标记）等待，
+            # 比 article[data-testid="tweet"]（文章级 testid）更稳定；Render 实例
+            # 较慢，时间轴 hydration 需要更久，超时放宽到 45s。
             try:
-                page.wait_for_selector('article[data-testid="tweet"]', timeout=15000)
+                page.wait_for_selector('[data-testid="tweetText"]', timeout=45000)
             except Exception:
-                # 诊断：selector 超时 → 页面没渲染出推文。记录文章数与 body 片段。
+                # 诊断：即便超时也不直接放弃——记录现状后继续滚动收割，
+                # 时间轴可能在滚动/再等一会儿后才补齐。
                 try:
                     _arts = page.eval_on_selector_all("article", "els => els.length")
-                    _body = (page.inner_text("body") or "")[:280].replace("\n", " ")
+                    _tt = page.eval_on_selector_all('[data-testid="tweetText"]', "els => els.length")
+                    _body = (page.inner_text("body") or "")[:200].replace("\n", " ")
                 except Exception as _e:
-                    _arts, _body = "?", f"<body read failed: {_e}>"
-                print(f"[scraper] Twitter @{username}: tweet selector timeout — "
-                      f"articles={_arts} body_snippet={_body!r}")
-                return []
+                    _arts, _tt, _body = "?", "?", f"<body read failed: {_e}>"
+                print(f"[scraper] Twitter @{username}: tweetText wait timeout — "
+                      f"articles={_arts} tweetText={_tt} body_snippet={_body!r} — continuing anyway")
             _time.sleep(2)
 
             # X 采用虚拟滚动：向下滚动后，顶部（最新）推文会被移出 DOM。
             # 旧逻辑「先滚动 6 次再一次性提取」只会拿到较旧的推文，丢失最新几条。
             # 修复：边滚边累积——每次滚动后立即提取当前 DOM 内的推文并按 url 去重。
+            # 以 [data-testid="tweetText"]（推文正文）为锚点，向上找到所属 article。
+            # 不再依赖 article 自身的 data-testid="tweet"——X 的 DOM 结构时有变动，
+            # 而 tweetText 标记更稳定（Render 上实测 article 级 testid 未命中）。
             _EXTRACT_JS = """
                 () => {
                     const out = [];
-                    const articles = document.querySelectorAll('article[data-testid="tweet"]');
-                    for (const article of articles) {
-                        const textEl = article.querySelector('[data-testid="tweetText"]');
-                        const text = textEl ? textEl.innerText.trim() : '';
+                    const seen = new Set();
+                    const textEls = document.querySelectorAll('[data-testid="tweetText"]');
+                    for (const textEl of textEls) {
+                        const article = textEl.closest('article');
+                        if (!article || seen.has(article)) continue;
+                        seen.add(article);
+                        const text = textEl.innerText.trim();
                         if (!text) continue;
                         const timeEl = article.querySelector('time');
                         const date = timeEl ? (timeEl.getAttribute('datetime') || '') : '';
